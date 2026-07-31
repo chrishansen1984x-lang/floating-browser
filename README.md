@@ -25,10 +25,10 @@ Do not disable Gatekeeper or run Terminal bypass commands. Read [UNSIGNED_BETA_I
 
 ## Use
 
-- Press **Home** to return to the site launcher.
+- Select the house button to return to the site launcher.
 - Open any page, then choose **More > Add Current Site** to save it to the launcher.
 - Open **More** to manage saved sites, open the page in Safari, change ad blocking, or toggle always-on-top behavior.
-- Press **Mini** after video starts to create a compact borderless window; press **Full** to restore it.
+- Select the Mini Player button after video starts to create a compact borderless window; use the corner restore button to return to the full browser.
 - Press `Command-L` to select the address field and `Command-R` to reload.
 - Use **More > Open in Safari** when a streaming service refuses embedded playback.
 

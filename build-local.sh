@@ -57,10 +57,16 @@ sign_app() {
   codesign --verify --strict --verbose=2 "$target"
 }
 
+verify_app() {
+  codesign --verify --strict --verbose=2 "$1"
+}
+
 mkdir -p "$BUILD_DIR" "$(dirname "$INSTALL_PATH")"
+sign_app "$STAGED_APP"
+
 rm -rf "$APP_PATH"
 ditto "$STAGED_APP" "$APP_PATH"
-sign_app "$APP_PATH"
+verify_app "$APP_PATH"
 
 if [[ "${SKIP_INSTALL:-0}" == "1" ]]; then
   file "$APP_PATH/Contents/MacOS/$PRODUCT_NAME"
@@ -71,7 +77,7 @@ fi
 pkill -x "$PRODUCT_NAME" 2>/dev/null || true
 
 rm -rf "$INSTALL_PATH"
-ditto "$APP_PATH" "$INSTALL_PATH"
+ditto "$STAGED_APP" "$INSTALL_PATH"
 sign_app "$INSTALL_PATH"
 
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Versions/Current/Frameworks/LaunchServices.framework/Versions/Current/Support/lsregister"

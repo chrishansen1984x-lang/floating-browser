@@ -194,11 +194,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 final class BrowserWindowController: NSWindowController, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
-    private let addressField = NSTextField()
+    private let addressField = NSSearchField()
     private let statusLabel = NSTextField(labelWithString: "Choose a site or enter a URL")
     private let toolbarStack = NSStackView()
     private let shortcutStack = NSStackView()
-    private let miniLeadingSpacer = NSView()
     private let miniOverlayButton = NSButton(title: "Full", target: nil, action: nil)
     private let alwaysOnTopButton = NSButton(checkboxWithTitle: "Always on Top", target: nil, action: nil)
     private let blockAdsButton = NSButton(checkboxWithTitle: "Block Ads", target: nil, action: nil)
@@ -233,6 +232,7 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
     private var recentWebContentRestarts: [Date] = []
     private var isShowingProcessRecoveryAlert = false
     private var isShowingStartPage = false
+    private var chromeContainer: NSView?
     private var webViewMinimumHeightConstraint: NSLayoutConstraint?
 
     private var allSites: [Site] {
@@ -264,6 +264,8 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         )
 
         window.title = "Floating Browser"
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
         window.minSize = NSSize(width: 560, height: 420)
         window.contentMinSize = NSSize(width: 560, height: 420)
         window.isReleasedWhenClosed = false
@@ -370,18 +372,22 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
 
         toolbarStack.orientation = .horizontal
         toolbarStack.alignment = .centerY
-        toolbarStack.spacing = 8
-        toolbarStack.edgeInsets = NSEdgeInsets(top: 10, left: 10, bottom: 8, right: 10)
-        miniLeadingSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        miniLeadingSpacer.isHidden = true
-        miniOverlayButton.bezelStyle = .rounded
+        toolbarStack.spacing = 6
+        toolbarStack.edgeInsets = NSEdgeInsets(top: 6, left: 8, bottom: 6, right: 8)
+        toolbarStack.translatesAutoresizingMaskIntoConstraints = false
+
+        configureSymbolButton(
+            miniOverlayButton,
+            symbolName: "arrow.up.left.and.arrow.down.right",
+            label: "Return to Full Size"
+        )
         miniOverlayButton.target = self
         miniOverlayButton.action = #selector(toggleMiniPlayer)
         miniOverlayButton.isHidden = true
         miniOverlayButton.translatesAutoresizingMaskIntoConstraints = false
 
         for button in [backButton, forwardButton, reloadButton, homeButton, miniModeButton, goButton, moreButton] {
-            button.bezelStyle = .rounded
+            button.bezelStyle = .toolbar
             button.setButtonType(.momentaryPushIn)
             button.translatesAutoresizingMaskIntoConstraints = false
         }
@@ -391,7 +397,8 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         configureSymbolButton(reloadButton, symbolName: "arrow.clockwise", label: "Reload")
         configureSymbolButton(homeButton, symbolName: "house", label: "Home")
         configureSymbolButton(goButton, symbolName: "arrow.right", label: "Go")
-        configureSymbolButton(moreButton, symbolName: "ellipsis.circle", label: "More")
+        configureSymbolButton(miniModeButton, symbolName: "pip.enter", label: "Mini Player")
+        configureSymbolButton(moreButton, symbolName: "ellipsis", label: "More")
 
         backButton.target = self
         backButton.action = #selector(goBack)
@@ -403,8 +410,6 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         homeButton.action = #selector(loadStart)
         miniModeButton.target = self
         miniModeButton.action = #selector(toggleMiniPlayer)
-        miniModeButton.toolTip = "Toggle Mini Player"
-        miniModeButton.setAccessibilityLabel("Toggle Mini Player")
         addSiteButton.target = self
         addSiteButton.action = #selector(addCurrentSite)
         manageSitesButton.target = self
@@ -420,21 +425,23 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         blockAdsButton.target = self
         blockAdsButton.action = #selector(toggleContentBlocking)
 
-        addressField.placeholderString = "Enter a site or URL"
+        addressField.placeholderString = "Search or enter website"
         addressField.target = self
         addressField.action = #selector(loadAddress)
+        addressField.sendsSearchStringImmediately = false
+        addressField.sendsWholeSearchString = true
         addressField.lineBreakMode = .byTruncatingMiddle
         addressField.translatesAutoresizingMaskIntoConstraints = false
         addressField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        addressField.controlSize = .large
 
         toolbarStack.addArrangedSubview(backButton)
         toolbarStack.addArrangedSubview(forwardButton)
         toolbarStack.addArrangedSubview(reloadButton)
         toolbarStack.addArrangedSubview(homeButton)
-        toolbarStack.addArrangedSubview(miniLeadingSpacer)
-        toolbarStack.addArrangedSubview(miniModeButton)
         toolbarStack.addArrangedSubview(addressField)
         toolbarStack.addArrangedSubview(goButton)
+        toolbarStack.addArrangedSubview(miniModeButton)
         toolbarStack.addArrangedSubview(moreButton)
 
         shortcutStack.orientation = .horizontal
@@ -445,9 +452,10 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         statusLabel.lineBreakMode = .byTruncatingMiddle
         renderShortcutButtons()
 
+        let chromeContainer = makeChromeContainer(containing: toolbarStack)
+        self.chromeContainer = chromeContainer
         webView.translatesAutoresizingMaskIntoConstraints = false
-        rootStack.addArrangedSubview(toolbarStack)
-        rootStack.addArrangedSubview(shortcutStack)
+        rootStack.addArrangedSubview(chromeContainer)
         rootStack.addArrangedSubview(webView)
 
         contentView.addSubview(rootStack)
@@ -463,18 +471,69 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
             rootStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
             miniOverlayButton.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 10),
             miniOverlayButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -10),
-            addressField.widthAnchor.constraint(greaterThanOrEqualToConstant: 180),
+            chromeContainer.heightAnchor.constraint(equalToConstant: 54),
+            addressField.heightAnchor.constraint(equalToConstant: 30),
+            addressField.widthAnchor.constraint(greaterThanOrEqualToConstant: 200),
             webViewMinimumHeightConstraint
         ])
+    }
+
+    private func makeChromeContainer(containing content: NSView) -> NSView {
+        let host = NSView()
+        host.translatesAutoresizingMaskIntoConstraints = false
+
+        if #available(macOS 26.0, *) {
+            let glass = NSGlassEffectView()
+            glass.cornerRadius = 15
+            glass.style = .regular
+            glass.tintColor = NSColor.controlBackgroundColor.withAlphaComponent(0.12)
+            glass.contentView = content
+            glass.translatesAutoresizingMaskIntoConstraints = false
+            if #available(macOS 27.0, *) {
+                glass.effectIsInteractive = true
+            }
+            host.addSubview(glass)
+            NSLayoutConstraint.activate([
+                glass.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: 8),
+                glass.trailingAnchor.constraint(equalTo: host.trailingAnchor, constant: -8),
+                glass.topAnchor.constraint(equalTo: host.topAnchor, constant: 6),
+                glass.bottomAnchor.constraint(equalTo: host.bottomAnchor, constant: -6)
+            ])
+            return host
+        }
+
+        let material = NSVisualEffectView()
+        material.material = .headerView
+        material.blendingMode = .withinWindow
+        material.state = .active
+        material.wantsLayer = true
+        material.layer?.cornerRadius = 15
+        material.layer?.masksToBounds = true
+        material.translatesAutoresizingMaskIntoConstraints = false
+        host.addSubview(material)
+        material.addSubview(content)
+        NSLayoutConstraint.activate([
+            material.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: 8),
+            material.trailingAnchor.constraint(equalTo: host.trailingAnchor, constant: -8),
+            material.topAnchor.constraint(equalTo: host.topAnchor, constant: 6),
+            material.bottomAnchor.constraint(equalTo: host.bottomAnchor, constant: -6),
+            content.leadingAnchor.constraint(equalTo: material.leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: material.trailingAnchor),
+            content.topAnchor.constraint(equalTo: material.topAnchor),
+            content.bottomAnchor.constraint(equalTo: material.bottomAnchor)
+        ])
+        return host
     }
 
     private func configureSymbolButton(_ button: NSButton, symbolName: String, label: String) {
         button.title = ""
         button.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: label)
         button.imagePosition = .imageOnly
+        button.bezelStyle = .toolbar
         button.toolTip = label
         button.setAccessibilityLabel(label)
         button.widthAnchor.constraint(equalToConstant: 32).isActive = true
+        button.heightAnchor.constraint(equalToConstant: 30).isActive = true
     }
 
     @objc private func showMoreMenu(_ sender: NSButton) {
@@ -737,7 +796,6 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         normalWindowFrame = window.frame
         persistNormalWindowFrame()
         preMiniAlwaysOnTop = alwaysOnTopButton.state == .on
-        miniModeButton.title = "Full"
         webViewMinimumHeightConstraint?.isActive = false
         applyMiniChrome(true)
 
@@ -761,7 +819,6 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         guard let window else { return }
 
         isMiniMode = false
-        miniModeButton.title = "Mini"
         applyMiniChrome(false)
         webViewMinimumHeightConstraint?.isActive = true
 
@@ -803,12 +860,9 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
             control.isHidden = enabled
         }
 
+        chromeContainer?.isHidden = enabled
         toolbarStack.isHidden = enabled
         miniOverlayButton.isHidden = !enabled
-        miniLeadingSpacer.isHidden = !enabled
-        toolbarStack.edgeInsets = enabled
-            ? NSEdgeInsets(top: 8, left: 72, bottom: 6, right: 10)
-            : NSEdgeInsets(top: 10, left: 10, bottom: 8, right: 10)
     }
 
     @objc private func addCurrentSite() {
@@ -1334,9 +1388,31 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
     ]
 
     private static func startPageHTML(sites: [Site], customSiteCount: Int) -> String {
-        let links = sites.map { site in
-            """
-              <a href="\(htmlEscaped(site.url))">\(htmlEscaped(site.title))</a>
+        let accents = [
+            "#ff453a",
+            "#ff375f",
+            "#30d158",
+            "#5e8bff",
+            "#bf5af2",
+            "#64d2ff",
+            "#ff9f0a",
+            "#40c8e0"
+        ]
+        let links = sites.enumerated().map { index, site in
+            let host = URL(string: site.url)?
+                .host?
+                .replacingOccurrences(of: "www.", with: "") ?? "Website"
+            let initial = String(site.title.prefix(1)).uppercased()
+            let accent = accents[index % accents.count]
+            return """
+              <a href="\(htmlEscaped(site.url))" style="--accent: \(accent)">
+                <span class="site-mark">\(htmlEscaped(initial))</span>
+                <span class="site-copy">
+                  <strong>\(htmlEscaped(site.title))</strong>
+                  <small>\(htmlEscaped(host))</small>
+                </span>
+                <span class="chevron" aria-hidden="true">&rsaquo;</span>
+              </a>
             """
         }.joined(separator: "\n")
 
@@ -1348,63 +1424,162 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
     <head>
       <meta name="viewport" content="width=device-width, initial-scale=1">
       <style>
+        :root {
+          color-scheme: light dark;
+          --background: #f2f3f5;
+          --surface: rgba(255, 255, 255, 0.72);
+          --surface-hover: rgba(255, 255, 255, 0.92);
+          --border: rgba(40, 44, 52, 0.12);
+          --label: #18191c;
+          --secondary: #676b73;
+          --shadow: rgba(20, 24, 32, 0.08);
+        }
+        @media (prefers-color-scheme: dark) {
+          :root {
+            --background: #0e1013;
+            --surface: rgba(255, 255, 255, 0.055);
+            --surface-hover: rgba(255, 255, 255, 0.095);
+            --border: rgba(255, 255, 255, 0.11);
+            --label: #f4f5f7;
+            --secondary: #9ca1ab;
+            --shadow: rgba(0, 0, 0, 0.28);
+          }
+        }
         html, body {
           margin: 0;
           min-height: 100%;
-          background: #101113;
-          color: #f4f4f5;
+          background: var(--background);
+          color: var(--label);
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
         main {
-          max-width: 920px;
+          max-width: 980px;
           margin: 0 auto;
-          padding: 56px 36px;
+          padding: 46px 32px 64px;
+        }
+        header {
+          display: flex;
+          align-items: end;
+          justify-content: space-between;
+          gap: 20px;
+          margin-bottom: 26px;
         }
         h1 {
-          font-size: 42px;
-          margin: 0 0 12px;
+          font-size: 34px;
+          font-weight: 720;
+          margin: 0 0 6px;
           letter-spacing: 0;
         }
         p {
-          color: #b8bdc7;
-          font-size: 17px;
-          line-height: 1.45;
-          margin: 0 0 28px;
+          color: var(--secondary);
+          font-size: 15px;
+          line-height: 1.4;
+          margin: 0;
         }
         .grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
           gap: 12px;
         }
         a {
-          display: block;
-          padding: 18px 16px;
-          border: 1px solid #30343b;
+          display: flex;
+          align-items: center;
+          gap: 13px;
+          min-height: 72px;
+          box-sizing: border-box;
+          padding: 14px;
+          border: 1px solid var(--border);
           border-radius: 8px;
-          background: #191b1f;
-          color: #ffffff;
+          background: var(--surface);
+          box-shadow: 0 8px 24px var(--shadow);
+          backdrop-filter: blur(18px) saturate(135%);
+          color: var(--label);
           text-decoration: none;
-          font-weight: 650;
+          transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
         }
         a:hover {
-          background: #242832;
-          border-color: #4a5260;
+          background: var(--surface-hover);
+          border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+          transform: translateY(-1px);
+        }
+        a:active {
+          transform: translateY(0);
+        }
+        .site-mark {
+          display: grid;
+          place-items: center;
+          width: 38px;
+          height: 38px;
+          flex: 0 0 38px;
+          border: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
+          border-radius: 50%;
+          background: color-mix(in srgb, var(--accent) 16%, transparent);
+          color: var(--accent);
+          font-size: 15px;
+          font-weight: 750;
+        }
+        .site-copy {
+          min-width: 0;
+          flex: 1;
+        }
+        strong, small {
+          display: block;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        strong {
+          font-size: 15px;
+          font-weight: 650;
+        }
+        small {
+          margin-top: 3px;
+          color: var(--secondary);
+          font-size: 12px;
+        }
+        .chevron {
+          color: var(--secondary);
+          font-size: 24px;
+          font-weight: 300;
         }
         .meta {
-          margin-top: 18px;
-          color: #858b96;
-          font-size: 14px;
+          flex: 0 0 auto;
+          color: var(--secondary);
+          font-size: 12px;
+        }
+        @media (max-width: 640px) {
+          main {
+            padding: 30px 20px 48px;
+          }
+          header {
+            display: block;
+          }
+          .meta {
+            margin-top: 8px;
+          }
+          .grid {
+            grid-template-columns: 1fr;
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          a {
+            transition: none;
+          }
         }
       </style>
     </head>
     <body>
       <main>
-        <h1>Floating Browser</h1>
-        <p>Pick a site, type any URL in the bar above, or press Add Site after opening a page to save it here.</p>
+        <header>
+          <div>
+            <h1>Floating Browser</h1>
+            <p>Choose a site or enter an address above.</p>
+          </div>
+          <div class="meta">\(savedText)</div>
+        </header>
         <section class="grid">
         \(links)
         </section>
-        <div class="meta">\(savedText)</div>
       </main>
     </body>
     </html>

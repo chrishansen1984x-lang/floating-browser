@@ -4,6 +4,8 @@ Floating Browser is a small macOS browser window for keeping websites and web vi
 
 ## Highlights
 
+- Modern adaptive browser chrome with Liquid Glass on supported macOS versions.
+- Responsive Home launcher with clearer saved-site names and identities.
 - Compact 16:9 Mini mode that stays above other apps.
 - Home launcher with built-in and custom site shortcuts.
 - Back, forward, reload, address search, and Safari fallback.
