@@ -195,22 +195,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 final class BrowserWindowController: NSWindowController, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
     private let addressField = NSSearchField()
-    private let statusLabel = NSTextField(labelWithString: "Choose a site or enter a URL")
+    private let statusLabel = NSTextField(labelWithString: "")
+    private let statusToast = NSVisualEffectView()
     private let toolbarStack = NSStackView()
-    private let shortcutStack = NSStackView()
     private let miniOverlayButton = NSButton(title: "Full", target: nil, action: nil)
+    private let miniCloseButton = NSButton(title: "Close", target: nil, action: nil)
     private let alwaysOnTopButton = NSButton(checkboxWithTitle: "Always on Top", target: nil, action: nil)
     private let blockAdsButton = NSButton(checkboxWithTitle: "Block Ads", target: nil, action: nil)
     private let backButton = NSButton(title: "Back", target: nil, action: nil)
     private let forwardButton = NSButton(title: "Forward", target: nil, action: nil)
     private let reloadButton = NSButton(title: "Reload", target: nil, action: nil)
-    private let goButton = NSButton(title: "Go", target: nil, action: nil)
     private let homeButton = NSButton(title: "Home", target: nil, action: nil)
     private let miniModeButton = NSButton(title: "Mini", target: nil, action: nil)
     private let moreButton = NSButton(title: "", target: nil, action: nil)
-    private let addSiteButton = NSButton(title: "Add Site", target: nil, action: nil)
-    private let manageSitesButton = NSButton(title: "Manage", target: nil, action: nil)
-    private let openSafariButton = NSButton(title: "Safari", target: nil, action: nil)
     private let webView: WKWebView
     private let defaultSites: [Site] = [
         Site(title: "Netflix", url: "https://www.netflix.com"),
@@ -234,6 +231,8 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
     private var isShowingStartPage = false
     private var chromeContainer: NSView?
     private var webViewMinimumHeightConstraint: NSLayoutConstraint?
+    private var statusDismissWorkItem: DispatchWorkItem?
+    private var statusGeneration = 0
 
     private var allSites: [Site] {
         defaultSites + customSites
@@ -258,7 +257,7 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         let frame = BrowserWindowController.restoredWindowFrame() ?? BrowserWindowController.defaultWindowFrame()
         let window = NSWindow(
             contentRect: frame,
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
@@ -266,6 +265,7 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         window.title = "Floating Browser"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
         window.minSize = NSSize(width: 560, height: 420)
         window.contentMinSize = NSSize(width: 560, height: 420)
         window.isReleasedWhenClosed = false
@@ -381,12 +381,20 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
             symbolName: "arrow.up.left.and.arrow.down.right",
             label: "Return to Full Size"
         )
+        miniOverlayButton.bezelStyle = .circular
         miniOverlayButton.target = self
         miniOverlayButton.action = #selector(toggleMiniPlayer)
         miniOverlayButton.isHidden = true
         miniOverlayButton.translatesAutoresizingMaskIntoConstraints = false
 
-        for button in [backButton, forwardButton, reloadButton, homeButton, miniModeButton, goButton, moreButton] {
+        configureSymbolButton(miniCloseButton, symbolName: "xmark", label: "Close Mini Player")
+        miniCloseButton.bezelStyle = .circular
+        miniCloseButton.target = self
+        miniCloseButton.action = #selector(closeMiniPlayer)
+        miniCloseButton.isHidden = true
+        miniCloseButton.translatesAutoresizingMaskIntoConstraints = false
+
+        for button in [backButton, forwardButton, reloadButton, homeButton, miniModeButton, moreButton] {
             button.bezelStyle = .toolbar
             button.setButtonType(.momentaryPushIn)
             button.translatesAutoresizingMaskIntoConstraints = false
@@ -396,7 +404,6 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         configureSymbolButton(forwardButton, symbolName: "chevron.right", label: "Forward")
         configureSymbolButton(reloadButton, symbolName: "arrow.clockwise", label: "Reload")
         configureSymbolButton(homeButton, symbolName: "house", label: "Home")
-        configureSymbolButton(goButton, symbolName: "arrow.right", label: "Go")
         configureSymbolButton(miniModeButton, symbolName: "pip.enter", label: "Mini Player")
         configureSymbolButton(moreButton, symbolName: "ellipsis", label: "More")
 
@@ -410,14 +417,6 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         homeButton.action = #selector(loadStart)
         miniModeButton.target = self
         miniModeButton.action = #selector(toggleMiniPlayer)
-        addSiteButton.target = self
-        addSiteButton.action = #selector(addCurrentSite)
-        manageSitesButton.target = self
-        manageSitesButton.action = #selector(manageSites)
-        openSafariButton.target = self
-        openSafariButton.action = #selector(openCurrentPageInSafari)
-        goButton.target = self
-        goButton.action = #selector(loadAddress)
         moreButton.target = self
         moreButton.action = #selector(showMoreMenu(_:))
         alwaysOnTopButton.target = self
@@ -440,17 +439,26 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         toolbarStack.addArrangedSubview(reloadButton)
         toolbarStack.addArrangedSubview(homeButton)
         toolbarStack.addArrangedSubview(addressField)
-        toolbarStack.addArrangedSubview(goButton)
         toolbarStack.addArrangedSubview(miniModeButton)
         toolbarStack.addArrangedSubview(moreButton)
 
-        shortcutStack.orientation = .horizontal
-        shortcutStack.alignment = .centerY
-        shortcutStack.spacing = 8
-        shortcutStack.edgeInsets = NSEdgeInsets(top: 0, left: 10, bottom: 8, right: 10)
+        statusToast.material = .popover
+        statusToast.blendingMode = .withinWindow
+        statusToast.state = .active
+        statusToast.wantsLayer = true
+        statusToast.layer?.cornerRadius = 10
+        statusToast.layer?.masksToBounds = true
+        statusToast.alphaValue = 0
+        statusToast.isHidden = true
+        statusToast.translatesAutoresizingMaskIntoConstraints = false
+
         statusLabel.textColor = .secondaryLabelColor
+        statusLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        statusLabel.alignment = .center
         statusLabel.lineBreakMode = .byTruncatingMiddle
-        renderShortcutButtons()
+        statusLabel.maximumNumberOfLines = 2
+        statusLabel.translatesAutoresizingMaskIntoConstraints = false
+        statusToast.addSubview(statusLabel)
 
         let chromeContainer = makeChromeContainer(containing: toolbarStack)
         self.chromeContainer = chromeContainer
@@ -460,6 +468,8 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
 
         contentView.addSubview(rootStack)
         contentView.addSubview(miniOverlayButton)
+        contentView.addSubview(miniCloseButton)
+        contentView.addSubview(statusToast)
 
         let webViewMinimumHeightConstraint = webView.heightAnchor.constraint(greaterThanOrEqualToConstant: 300)
         self.webViewMinimumHeightConstraint = webViewMinimumHeightConstraint
@@ -469,8 +479,19 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
             rootStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             rootStack.topAnchor.constraint(equalTo: contentView.topAnchor),
             rootStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            chromeContainer.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
             miniOverlayButton.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 10),
             miniOverlayButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -10),
+            miniCloseButton.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 10),
+            miniCloseButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 10),
+            statusToast.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            statusToast.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 60),
+            statusToast.widthAnchor.constraint(lessThanOrEqualTo: contentView.widthAnchor, constant: -32),
+            statusLabel.leadingAnchor.constraint(equalTo: statusToast.leadingAnchor, constant: 12),
+            statusLabel.trailingAnchor.constraint(equalTo: statusToast.trailingAnchor, constant: -12),
+            statusLabel.topAnchor.constraint(equalTo: statusToast.topAnchor, constant: 7),
+            statusLabel.bottomAnchor.constraint(equalTo: statusToast.bottomAnchor, constant: -7),
+            statusLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 440),
             chromeContainer.heightAnchor.constraint(equalToConstant: 54),
             addressField.heightAnchor.constraint(equalToConstant: 30),
             addressField.widthAnchor.constraint(greaterThanOrEqualToConstant: 200),
@@ -493,9 +514,13 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
                 glass.effectIsInteractive = true
             }
             host.addSubview(glass)
+            let glassCenterConstraint = glass.centerXAnchor.constraint(equalTo: host.centerXAnchor)
+            glassCenterConstraint.priority = .defaultHigh
             NSLayoutConstraint.activate([
-                glass.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: 8),
-                glass.trailingAnchor.constraint(equalTo: host.trailingAnchor, constant: -8),
+                glassCenterConstraint,
+                glass.leadingAnchor.constraint(greaterThanOrEqualTo: host.leadingAnchor, constant: 76),
+                glass.trailingAnchor.constraint(lessThanOrEqualTo: host.trailingAnchor, constant: -8),
+                glass.widthAnchor.constraint(lessThanOrEqualToConstant: 720),
                 glass.topAnchor.constraint(equalTo: host.topAnchor, constant: 6),
                 glass.bottomAnchor.constraint(equalTo: host.bottomAnchor, constant: -6)
             ])
@@ -512,9 +537,13 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         material.translatesAutoresizingMaskIntoConstraints = false
         host.addSubview(material)
         material.addSubview(content)
+        let materialCenterConstraint = material.centerXAnchor.constraint(equalTo: host.centerXAnchor)
+        materialCenterConstraint.priority = .defaultHigh
         NSLayoutConstraint.activate([
-            material.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: 8),
-            material.trailingAnchor.constraint(equalTo: host.trailingAnchor, constant: -8),
+            materialCenterConstraint,
+            material.leadingAnchor.constraint(greaterThanOrEqualTo: host.leadingAnchor, constant: 76),
+            material.trailingAnchor.constraint(lessThanOrEqualTo: host.trailingAnchor, constant: -8),
+            material.widthAnchor.constraint(lessThanOrEqualToConstant: 720),
             material.topAnchor.constraint(equalTo: host.topAnchor, constant: 6),
             material.bottomAnchor.constraint(equalTo: host.bottomAnchor, constant: -6),
             content.leadingAnchor.constraint(equalTo: material.leadingAnchor),
@@ -534,6 +563,46 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         button.setAccessibilityLabel(label)
         button.widthAnchor.constraint(equalToConstant: 32).isActive = true
         button.heightAnchor.constraint(equalToConstant: 30).isActive = true
+    }
+
+    private func showStatus(
+        _ message: String,
+        duration: TimeInterval? = 3,
+        isError: Bool = false
+    ) {
+        statusDismissWorkItem?.cancel()
+        statusGeneration += 1
+        statusLabel.stringValue = message
+        statusLabel.textColor = isError ? .systemRed : .labelColor
+        statusToast.isHidden = false
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.16
+            statusToast.animator().alphaValue = 1
+        }
+
+        guard let duration else { return }
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.hideStatus()
+        }
+        statusDismissWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: workItem)
+    }
+
+    private func hideStatus() {
+        statusDismissWorkItem?.cancel()
+        statusDismissWorkItem = nil
+        guard !statusToast.isHidden else { return }
+        statusGeneration += 1
+        let generation = statusGeneration
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.16
+            statusToast.animator().alphaValue = 0
+        }, completionHandler: { [weak self] in
+            Task { @MainActor in
+                guard self?.statusGeneration == generation else { return }
+                self?.statusToast.isHidden = true
+            }
+        })
     }
 
     @objc private func showMoreMenu(_ sender: NSButton) {
@@ -560,25 +629,6 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
         item.target = self
         return item
-    }
-
-    private func renderShortcutButtons() {
-        for view in shortcutStack.arrangedSubviews {
-            shortcutStack.removeArrangedSubview(view)
-            view.removeFromSuperview()
-        }
-
-        for site in allSites {
-            let button = NSButton(title: site.title, target: self, action: #selector(loadShortcut(_:)))
-            button.bezelStyle = .rounded
-            button.identifier = NSUserInterfaceItemIdentifier(site.url)
-            shortcutStack.addArrangedSubview(button)
-        }
-
-        let spacer = NSView()
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        shortcutStack.addArrangedSubview(spacer)
-        shortcutStack.addArrangedSubview(statusLabel)
     }
 
     private func restoreAlwaysOnTop() {
@@ -625,7 +675,7 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
     ) {
         if contentBlockingActive == enabled {
             if let statusMessage {
-                statusLabel.stringValue = statusMessage
+                showStatus(statusMessage)
             }
             completion?()
             return
@@ -638,7 +688,7 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         contentBlockingActive = false
 
         guard enabled else {
-            statusLabel.stringValue = statusMessage ?? "Ad blocking off"
+            showStatus(statusMessage ?? "Ad blocking off")
             if reloadPage {
                 webView.reload()
             }
@@ -649,7 +699,7 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         if let compiledContentRuleList {
             userContentController.add(compiledContentRuleList)
             contentBlockingActive = true
-            statusLabel.stringValue = "Ad blocking on"
+            showStatus("Ad blocking on")
             if reloadPage {
                 webView.reload()
             }
@@ -672,7 +722,7 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
                     self.compiledContentRuleList = ruleList
                     userContentController.add(ruleList)
                     self.contentBlockingActive = true
-                    self.statusLabel.stringValue = "Ad blocking on"
+                    self.showStatus("Ad blocking on")
                     if reloadPage {
                         self.webView.reload()
                     }
@@ -682,9 +732,13 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
 
                 self.contentBlockingActive = false
                 if let error {
-                    self.statusLabel.stringValue = "Ad blocker failed: \(error.localizedDescription)"
+                    self.showStatus(
+                        "Ad blocker failed: \(error.localizedDescription)",
+                        duration: 6,
+                        isError: true
+                    )
                 } else {
-                    self.statusLabel.stringValue = "Ad blocker unavailable"
+                    self.showStatus("Ad blocker unavailable", duration: 6, isError: true)
                 }
                 completion?()
             }
@@ -706,13 +760,12 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
 
     private func load(urlString: String) {
         guard let url = normalizedURL(from: urlString) else {
-            statusLabel.stringValue = "Enter a valid http or https address"
+            showStatus("Enter a valid web address", duration: 6, isError: true)
             return
         }
         isShowingStartPage = false
-        shortcutStack.isHidden = true
         addressField.stringValue = url.absoluteString
-        statusLabel.stringValue = "Loading..."
+        showStatus("Loading...", duration: nil)
         persistLastURL(url)
         configureContentBlocking(for: url, reloadPage: false)
         webView.load(URLRequest(url: url))
@@ -720,9 +773,8 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
 
     private func loadStartPage() {
         isShowingStartPage = true
-        shortcutStack.isHidden = false
         addressField.stringValue = ""
-        statusLabel.stringValue = "Choose a site or enter a URL"
+        hideStatus()
         configureContentBlocking(for: nil, reloadPage: false)
         webView.loadHTMLString(
             Self.startPageHTML(sites: allSites, customSiteCount: customSites.count),
@@ -739,7 +791,6 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         if isShowingStartPage ||
             BrowserPolicy.isInternalURL(url) ||
             url.scheme?.lowercased() == "about" {
-            shortcutStack.isHidden = false
             addressField.stringValue = ""
             UserDefaults.standard.removeObject(forKey: DefaultsKey.lastURL)
             return
@@ -747,7 +798,6 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
 
         if BrowserPolicy.isAllowedWebURL(url) {
             isShowingStartPage = false
-            shortcutStack.isHidden = true
             addressField.stringValue = url.absoluteString
             persistLastURL(url)
         }
@@ -762,11 +812,6 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         let address = addressField.stringValue
         window?.makeFirstResponder(webView)
         load(urlString: address)
-    }
-
-    @objc private func loadShortcut(_ sender: NSButton) {
-        guard let urlString = sender.identifier?.rawValue else { return }
-        load(urlString: urlString)
     }
 
     @objc private func loadStart() {
@@ -787,6 +832,10 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         } else {
             enterMiniMode()
         }
+    }
+
+    @objc private func closeMiniPlayer() {
+        window?.performClose(nil)
     }
 
     private func enterMiniMode() {
@@ -822,7 +871,7 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         applyMiniChrome(false)
         webViewMinimumHeightConstraint?.isActive = true
 
-        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.isMovableByWindowBackground = false
         window.hasShadow = true
         window.minSize = NSSize(width: 560, height: 420)
@@ -851,9 +900,8 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
             reloadButton,
             homeButton,
             addressField,
-            goButton,
             moreButton,
-            shortcutStack
+            miniModeButton
         ]
 
         for control in regularControls {
@@ -863,6 +911,7 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         chromeContainer?.isHidden = enabled
         toolbarStack.isHidden = enabled
         miniOverlayButton.isHidden = !enabled
+        miniCloseButton.isHidden = !enabled
     }
 
     @objc private func addCurrentSite() {
@@ -902,7 +951,7 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
 
         let alert = NSAlert()
         alert.messageText = "Add this site to Home?"
-        alert.informativeText = "It will show up as a shortcut in the row and on the Home screen."
+        alert.informativeText = "It will appear in the Saved section on Home."
         alert.addButton(withTitle: "Add")
         alert.addButton(withTitle: "Cancel")
         alert.accessoryView = container
@@ -926,16 +975,15 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         customSites.removeAll { $0.url == savedSite.url }
         customSites.append(savedSite)
         saveCustomSites()
-        renderShortcutButtons()
-        statusLabel.stringValue = "Added \(savedSite.title)"
         loadStartPage()
+        showStatus("Added \(savedSite.title)")
     }
 
     @objc private func manageSites() {
         guard !customSites.isEmpty else {
             let alert = NSAlert()
             alert.messageText = "No custom sites yet"
-            alert.informativeText = "Open a page and press Add Site to save it here."
+            alert.informativeText = "Open a page and choose Add Current Site from the More menu."
             alert.addButton(withTitle: "OK")
             alert.runModal()
             return
@@ -946,24 +994,84 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
             popup.addItem(withTitle: "\(site.title) - \(site.url)")
         }
 
-        let alert = NSAlert()
-        alert.messageText = "Manage custom sites"
-        alert.informativeText = "Choose a saved site to remove from Home."
-        alert.addButton(withTitle: "Remove")
-        alert.addButton(withTitle: "Cancel")
-        alert.accessoryView = popup
+        let selectionAlert = NSAlert()
+        selectionAlert.messageText = "Manage saved sites"
+        selectionAlert.informativeText = "Choose a site to edit, reorder, or remove."
+        selectionAlert.addButton(withTitle: "Edit")
+        selectionAlert.addButton(withTitle: "Cancel")
+        selectionAlert.accessoryView = popup
 
-        guard alert.runModal() == .alertFirstButtonReturn else {
+        guard selectionAlert.runModal() == .alertFirstButtonReturn else {
             return
         }
 
         let index = popup.indexOfSelectedItem
         guard customSites.indices.contains(index) else { return }
-        let removed = customSites.remove(at: index)
+        let selectedSite = customSites[index]
+
+        let titleField = NSTextField(string: selectedSite.title)
+        let urlField = NSTextField(string: selectedSite.url)
+        let positionPopup = NSPopUpButton(frame: .zero, pullsDown: false)
+        for position in 1...customSites.count {
+            positionPopup.addItem(withTitle: "Position \(position)")
+        }
+        positionPopup.selectItem(at: index)
+
+        let editorStack = NSStackView()
+        editorStack.orientation = .vertical
+        editorStack.spacing = 7
+        editorStack.translatesAutoresizingMaskIntoConstraints = false
+        editorStack.addArrangedSubview(NSTextField(labelWithString: "Name"))
+        editorStack.addArrangedSubview(titleField)
+        editorStack.addArrangedSubview(NSTextField(labelWithString: "URL"))
+        editorStack.addArrangedSubview(urlField)
+        editorStack.addArrangedSubview(NSTextField(labelWithString: "Order"))
+        editorStack.addArrangedSubview(positionPopup)
+
+        let editorContainer = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 168))
+        editorContainer.addSubview(editorStack)
+        NSLayoutConstraint.activate([
+            editorStack.leadingAnchor.constraint(equalTo: editorContainer.leadingAnchor),
+            editorStack.trailingAnchor.constraint(equalTo: editorContainer.trailingAnchor),
+            editorStack.topAnchor.constraint(equalTo: editorContainer.topAnchor),
+            editorStack.bottomAnchor.constraint(equalTo: editorContainer.bottomAnchor)
+        ])
+
+        let editorAlert = NSAlert()
+        editorAlert.messageText = "Edit saved site"
+        editorAlert.addButton(withTitle: "Save")
+        editorAlert.addButton(withTitle: "Remove")
+        editorAlert.addButton(withTitle: "Cancel")
+        editorAlert.accessoryView = editorContainer
+
+        let response = editorAlert.runModal()
+        if response == .alertSecondButtonReturn {
+            let removed = customSites.remove(at: index)
+            saveCustomSites()
+            loadStartPage()
+            showStatus("Removed \(removed.title)")
+            return
+        }
+
+        guard response == .alertFirstButtonReturn else { return }
+
+        let title = titleField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let normalizedURL = normalizedURL(from: urlField.stringValue),
+              let persistedURL = BrowserPolicy.persistedURL(from: normalizedURL) else {
+            showStatus("Enter a valid web address", duration: 6, isError: true)
+            return
+        }
+
+        let updatedSite = Site(
+            title: title.isEmpty ? (persistedURL.host ?? "Site") : title,
+            url: persistedURL.absoluteString
+        )
+        customSites.remove(at: index)
+        let destination = min(positionPopup.indexOfSelectedItem, customSites.count)
+        customSites.insert(updatedSite, at: destination)
         saveCustomSites()
-        renderShortcutButtons()
-        statusLabel.stringValue = "Removed \(removed.title)"
         loadStartPage()
+        showStatus("Updated \(updatedSite.title)")
     }
 
     private func addableCurrentURLString() -> String? {
@@ -1025,8 +1133,8 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         ) { [weak self] in
             DispatchQueue.main.async {
                 UserDefaults.standard.removeObject(forKey: DefaultsKey.lastURL)
-                self?.statusLabel.stringValue = "Website data cleared"
                 self?.loadStartPage()
+                self?.showStatus("Website data cleared")
             }
         }
     }
@@ -1047,14 +1155,18 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         guard let url = webView.url,
               !BrowserPolicy.isInternalURL(url),
               BrowserPolicy.isAllowedWebURL(url) else {
-            statusLabel.stringValue = "No page to open in Safari"
+            showStatus("No page to open in Safari", duration: 6, isError: true)
             return
         }
 
         NSWorkspace.shared.open([url], withApplicationAt: URL(fileURLWithPath: "/Applications/Safari.app"), configuration: NSWorkspace.OpenConfiguration()) { [weak self] _, error in
             if let error {
                 DispatchQueue.main.async {
-                    self?.statusLabel.stringValue = "Could not open Safari: \(error.localizedDescription)"
+                    self?.showStatus(
+                        "Could not open Safari: \(error.localizedDescription)",
+                        duration: 6,
+                        isError: true
+                    )
                 }
             }
         }
@@ -1062,7 +1174,7 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         navigationGeneration += 1
-        statusLabel.stringValue = "Loading..."
+        showStatus("Loading...", duration: nil)
         updateNavigationState()
     }
 
@@ -1075,7 +1187,6 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
 
         if BrowserPolicy.isInternalURL(url) || url.scheme?.lowercased() == "about" {
             isShowingStartPage = true
-            shortcutStack.isHidden = false
             decisionHandler(.allow)
             return
         }
@@ -1085,9 +1196,6 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
             if navigationAction.shouldPerformDownload {
                 decisionHandler(.download)
                 return
-            }
-            if !BrowserPolicy.isInternalURL(url) {
-                shortcutStack.isHidden = true
             }
             configureContentBlocking(for: url, reloadPage: false)
             decisionHandler(.allow)
@@ -1100,7 +1208,7 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
             return
         }
 
-        statusLabel.stringValue = "Blocked unsupported address"
+        showStatus("Blocked unsupported address", duration: 6, isError: true)
         decisionHandler(.cancel)
     }
 
@@ -1113,7 +1221,7 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        statusLabel.stringValue = webView.title ?? "Ready"
+        hideStatus()
         updateNavigationState()
         watchForEmbeddedPlaybackError(generation: navigationGeneration)
     }
@@ -1177,12 +1285,12 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        statusLabel.stringValue = error.localizedDescription
+        showStatus(error.localizedDescription, duration: 6, isError: true)
         updateNavigationState()
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        statusLabel.stringValue = error.localizedDescription
+        showStatus(error.localizedDescription, duration: 6, isError: true)
         updateNavigationState()
     }
 
@@ -1191,9 +1299,9 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
            let url = navigationAction.request.url,
            BrowserPolicy.isAllowedWebURL(url) {
             webView.load(navigationAction.request)
-            statusLabel.stringValue = "Opened link in this window"
+            showStatus("Opened link in this window")
         } else if navigationAction.targetFrame == nil {
-            statusLabel.stringValue = "Blocked unsupported popup"
+            showStatus("Blocked unsupported popup", duration: 6, isError: true)
         }
         return nil
     }
@@ -1203,13 +1311,13 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         recentWebContentRestarts.removeAll { now.timeIntervalSince($0) > 60 }
 
         guard recentWebContentRestarts.count < 2 else {
-            statusLabel.stringValue = "Page repeatedly stopped responding"
+            showStatus("Page repeatedly stopped responding", duration: nil, isError: true)
             showWebContentRecoveryAlert()
             return
         }
 
         recentWebContentRestarts.append(now)
-        statusLabel.stringValue = "Page process restarted"
+        showStatus("Page process restarted", duration: 5, isError: true)
         webView.reload()
     }
 
@@ -1260,11 +1368,11 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
     }
 
     func downloadDidFinish(_ download: WKDownload) {
-        statusLabel.stringValue = "Download finished"
+        showStatus("Download finished")
     }
 
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
-        statusLabel.stringValue = "Download failed: \(error.localizedDescription)"
+        showStatus("Download failed: \(error.localizedDescription)", duration: 6, isError: true)
     }
 
     private func loadCustomSites() {
@@ -1398,12 +1506,33 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
             "#ff9f0a",
             "#40c8e0"
         ]
-        let links = sites.enumerated().map { index, site in
+
+        func accent(for site: Site) -> String {
+            let host = URL(string: site.url)?.host?.lowercased() ?? site.url.lowercased()
+            let knownAccent: [String: String] = [
+                "netflix.com": "#ff453a",
+                "youtube.com": "#ff375f",
+                "hulu.com": "#30d158",
+                "disneyplus.com": "#5e8bff",
+                "max.com": "#bf5af2",
+                "primevideo.com": "#64d2ff"
+            ]
+            if let match = knownAccent.first(where: { host == $0.key || host.hasSuffix(".\($0.key)") }) {
+                return match.value
+            }
+            let stableIndex = site.url.utf8.reduce(0) { partial, byte in
+                (partial * 33 + Int(byte)) % accents.count
+            }
+            return accents[stableIndex]
+        }
+
+        func linksHTML(for siteList: [Site]) -> String {
+            siteList.map { site in
             let host = URL(string: site.url)?
                 .host?
                 .replacingOccurrences(of: "www.", with: "") ?? "Website"
             let initial = String(site.title.prefix(1)).uppercased()
-            let accent = accents[index % accents.count]
+            let accent = accent(for: site)
             return """
               <a href="\(htmlEscaped(site.url))" style="--accent: \(accent)">
                 <span class="site-mark">\(htmlEscaped(initial))</span>
@@ -1414,9 +1543,24 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
                 <span class="chevron" aria-hidden="true">&rsaquo;</span>
               </a>
             """
-        }.joined(separator: "\n")
+            }.joined(separator: "\n")
+        }
 
-        let savedText = customSiteCount == 1 ? "1 saved site" : "\(customSiteCount) saved sites"
+        let defaultSiteCount = max(0, sites.count - customSiteCount)
+        let defaultLinks = linksHTML(for: Array(sites.prefix(defaultSiteCount)))
+        let customLinks = linksHTML(for: Array(sites.suffix(customSiteCount)))
+        let savedLabel = customSiteCount == 1 ? "1 site" : "\(customSiteCount) sites"
+        let customSection = customSiteCount > 0 ? """
+        <section>
+          <div class="section-heading">
+            <h2>Saved</h2>
+            <span class="meta">\(savedLabel)</span>
+          </div>
+          <div class="grid saved-grid">
+          \(customLinks)
+          </div>
+        </section>
+        """ : ""
 
         return """
     <!doctype html>
@@ -1455,31 +1599,40 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         main {
           max-width: 980px;
           margin: 0 auto;
-          padding: 46px 32px 64px;
+          padding: 42px 32px 64px;
         }
         header {
-          display: flex;
-          align-items: end;
-          justify-content: space-between;
-          gap: 20px;
-          margin-bottom: 26px;
+          margin-bottom: 28px;
         }
         h1 {
-          font-size: 34px;
+          font-size: 32px;
           font-weight: 720;
-          margin: 0 0 6px;
+          margin: 0;
           letter-spacing: 0;
         }
-        p {
-          color: var(--secondary);
-          font-size: 15px;
-          line-height: 1.4;
+        section + section {
+          margin-top: 30px;
+        }
+        .section-heading {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 16px;
+          margin: 0 2px 10px;
+        }
+        h2 {
           margin: 0;
+          font-size: 13px;
+          font-weight: 650;
+          color: var(--secondary);
         }
         .grid {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
           gap: 12px;
+        }
+        .saved-grid {
+          grid-template-columns: repeat(auto-fill, minmax(220px, 238px));
         }
         a {
           display: flex;
@@ -1552,12 +1705,12 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
             padding: 30px 20px 48px;
           }
           header {
-            display: block;
-          }
-          .meta {
-            margin-top: 8px;
+            margin-bottom: 22px;
           }
           .grid {
+            grid-template-columns: 1fr;
+          }
+          .saved-grid {
             grid-template-columns: 1fr;
           }
         }
@@ -1571,15 +1724,17 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
     <body>
       <main>
         <header>
-          <div>
-            <h1>Floating Browser</h1>
-            <p>Choose a site or enter an address above.</p>
-          </div>
-          <div class="meta">\(savedText)</div>
+          <h1>Floating Browser</h1>
         </header>
-        <section class="grid">
-        \(links)
+        <section>
+          <div class="section-heading">
+            <h2>Streaming</h2>
+          </div>
+          <div class="grid">
+          \(defaultLinks)
+          </div>
         </section>
+        \(customSection)
       </main>
     </body>
     </html>

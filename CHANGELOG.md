@@ -2,6 +2,11 @@
 
 ## 0.3.0 - Public Beta Candidate
 
+- Unified the glass navigation controls with the macOS title bar and removed the redundant Go button.
+- Added visible status feedback for loading, errors, blocker changes, downloads, and WebKit recovery.
+- Added close and restore controls to Mini mode.
+- Split Home into Streaming and Saved sections with stable site colors.
+- Expanded saved-site management with editing, removal, and reordering.
 - Refreshed the browser chrome with compact symbol controls, a focused address field, and adaptive Liquid Glass on macOS 26 and later.
 - Redesigned Home with a responsive, system-aware saved-site grid and clearer site identity.
 - Simplified Mini mode to a single unobtrusive restore control over the video.
