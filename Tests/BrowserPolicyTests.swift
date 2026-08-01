@@ -28,8 +28,13 @@ import Testing
 
 @Test func streamingHostMatchingDoesNotAcceptLookalikes() throws {
     #expect(BrowserPolicy.shouldPauseContentBlocking(for: try #require(URL(string: "https://www.netflix.com/watch/1"))))
-    #expect(BrowserPolicy.shouldPauseContentBlocking(for: try #require(URL(string: "https://video.amazon.com"))))
+    #expect(BrowserPolicy.shouldPauseContentBlocking(for: try #require(URL(string: "https://www.amazon.com/gp/video/collection/IncludedwithPrime"))))
+    #expect(BrowserPolicy.shouldPauseContentBlocking(for: try #require(URL(string: "https://www.peacocktv.com/watch/home"))))
+    #expect(BrowserPolicy.shouldPauseContentBlocking(for: try #require(URL(string: "https://www.paramountplus.com/home"))))
+    #expect(BrowserPolicy.shouldPauseContentBlocking(for: try #require(URL(string: "https://tv.apple.com"))))
+    #expect(BrowserPolicy.shouldPauseContentBlocking(for: try #require(URL(string: "https://tubitv.com/home"))))
     #expect(!BrowserPolicy.shouldPauseContentBlocking(for: try #require(URL(string: "https://notamazon.com"))))
+    #expect(!BrowserPolicy.shouldPauseContentBlocking(for: try #require(URL(string: "https://fakepeacocktv.com"))))
 }
 
 @Test func identifiesServicesThatMayRejectEmbeddedPlayback() throws {

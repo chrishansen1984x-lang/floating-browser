@@ -9,7 +9,7 @@ Floating Browser is a small macOS browser window for keeping websites and web vi
 - Visible status feedback for navigation, downloads, blocking, and recovery.
 - Saved-site editing, reordering, and removal.
 - Compact 16:9 Mini mode that stays above other apps.
-- Home launcher with built-in and custom site shortcuts.
+- Home launcher with Netflix, YouTube, Hulu, Disney+, Max, Prime Video on Amazon, Apple TV+, Peacock, Paramount+, Tubi, and custom shortcuts.
 - Back, forward, reload, address search, and Safari fallback.
 - Lightweight local ad and popup blocking.
 - Native download destination picker.

@@ -26,6 +26,7 @@ Do not disable Gatekeeper or run Terminal bypass commands. Read [UNSIGNED_BETA_I
 ## Use
 
 - Select the house button to return to the site launcher.
+- The launcher includes Netflix, YouTube, Hulu, Disney+, Max, Prime Video on Amazon, Apple TV+, Peacock, Paramount+, and Tubi.
 - Open any page, then choose **More > Add Current Site** to save it to the launcher.
 - Open **More** to edit, reorder, or remove saved sites; open the page in Safari; change ad blocking; or toggle always-on-top behavior.
 - Select the Mini Player button after video starts to create a compact borderless window. Its corner controls close Mini or return to the full browser.

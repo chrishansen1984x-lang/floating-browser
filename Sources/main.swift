@@ -215,7 +215,11 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         Site(title: "Hulu", url: "https://www.hulu.com"),
         Site(title: "Disney+", url: "https://www.disneyplus.com"),
         Site(title: "Max", url: "https://www.max.com"),
-        Site(title: "Prime", url: "https://www.primevideo.com")
+        Site(title: "Prime Video", url: "https://www.amazon.com/gp/video/collection/IncludedwithPrime"),
+        Site(title: "Apple TV+", url: "https://tv.apple.com"),
+        Site(title: "Peacock", url: "https://www.peacocktv.com"),
+        Site(title: "Paramount+", url: "https://www.paramountplus.com"),
+        Site(title: "Tubi", url: "https://tubitv.com")
     ]
     private var customSites: [Site] = []
     private var isMiniMode = false
@@ -1515,7 +1519,12 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
                 "hulu.com": "#30d158",
                 "disneyplus.com": "#5e8bff",
                 "max.com": "#bf5af2",
-                "primevideo.com": "#64d2ff"
+                "primevideo.com": "#64d2ff",
+                "amazon.com": "#64d2ff",
+                "tv.apple.com": "#d1d1d6",
+                "peacocktv.com": "#ffd60a",
+                "paramountplus.com": "#0a84ff",
+                "tubitv.com": "#bf5af2"
             ]
             if let match = knownAccent.first(where: { host == $0.key || host.hasSuffix(".\($0.key)") }) {
                 return match.value

@@ -77,6 +77,7 @@ enum BrowserPolicy {
         "amazon.com",
         "peacocktv.com",
         "paramountplus.com",
-        "tv.apple.com"
+        "tv.apple.com",
+        "tubitv.com"
     ]
 }
