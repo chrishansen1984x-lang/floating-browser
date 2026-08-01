@@ -13,6 +13,8 @@ Floating Browser stores the following locally:
 - Preferences for ad blocking, always-on-top behavior, and window position.
 - Website cookies, caches, and local storage managed by WebKit.
 
+Floating Browser does not read or store passwords. The **Open Passwords...** command only launches Apple's Passwords app; copying a credential remains a user-controlled system action.
+
 Use **More > Clear Website Data** to remove WebKit website data. Saved site shortcuts and app preferences are not removed by that command.
 
 ## Websites

@@ -105,6 +105,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let openSafariItem = NSMenuItem(title: "Open Current Page in Safari", action: #selector(openCurrentPageInSafariFromMenu), keyEquivalent: "")
         openSafariItem.target = self
         fileMenu.addItem(openSafariItem)
+        let openPasswordsItem = NSMenuItem(title: "Open Passwords...", action: #selector(openPasswordsFromMenu), keyEquivalent: "")
+        openPasswordsItem.target = self
+        fileMenu.addItem(openPasswordsItem)
         fileItem.submenu = fileMenu
         mainMenu.addItem(fileItem)
 
@@ -180,6 +183,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor @objc private func openCurrentPageInSafariFromMenu() {
         openBrowserWindow()
         windowController?.openCurrentPageInSafari()
+    }
+
+    @MainActor @objc private func openPasswordsFromMenu() {
+        openBrowserWindow()
+        windowController?.openPasswords()
     }
 
     @MainActor @objc private func focusAddressFromMenu() {
@@ -614,6 +622,7 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         menu.addItem(menuItem(title: "Add Current Site", action: #selector(addCurrentSite)))
         menu.addItem(menuItem(title: "Manage Saved Sites", action: #selector(manageSites)))
         menu.addItem(menuItem(title: "Open in Safari", action: #selector(openCurrentPageInSafari)))
+        menu.addItem(menuItem(title: "Open Passwords...", action: #selector(openPasswords)))
         menu.addItem(.separator())
 
         let blockerItem = menuItem(title: "Block Ads", action: #selector(toggleContentBlockingFromMenu))
@@ -1172,6 +1181,32 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
                         isError: true
                     )
                 }
+            }
+        }
+    }
+
+    @MainActor @objc func openPasswords() {
+        guard let passwordsURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Passwords") else {
+            showStatus("Passwords is not available on this Mac", duration: 6, isError: true)
+            return
+        }
+
+        let host = webView.url?.host?.replacingOccurrences(of: "www.", with: "")
+        let guidance = host.map { "Search Passwords for \($0), then copy and paste" }
+            ?? "Copy the saved login, then return here to paste"
+        showStatus(guidance, duration: 10)
+
+        NSWorkspace.shared.openApplication(
+            at: passwordsURL,
+            configuration: NSWorkspace.OpenConfiguration()
+        ) { [weak self] _, error in
+            guard let error else { return }
+            DispatchQueue.main.async {
+                self?.showStatus(
+                    "Could not open Passwords: \(error.localizedDescription)",
+                    duration: 6,
+                    isError: true
+                )
             }
         }
     }

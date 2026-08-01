@@ -28,12 +28,14 @@ Do not disable Gatekeeper or run Terminal bypass commands. Read [UNSIGNED_BETA_I
 - Select the house button to return to the site launcher.
 - The launcher includes Netflix, YouTube, Hulu, Disney+, Max, Prime Video on Amazon, Apple TV+, Peacock, Paramount+, and Tubi.
 - Open any page, then choose **More > Add Current Site** to save it to the launcher.
-- Open **More** to edit, reorder, or remove saved sites; open the page in Safari; change ad blocking; or toggle always-on-top behavior.
+- Open **More** to edit, reorder, or remove saved sites; open the page in Safari; open Passwords; change ad blocking; or toggle always-on-top behavior.
 - Select the Mini Player button after video starts to create a compact borderless window. Its corner controls close Mini or return to the full browser.
 - Press `Command-L` to select the address field and `Command-R` to reload.
 - Use **More > Open in Safari** when a streaming service refuses embedded playback.
 
 Website behavior can change without an app update. Some services allow browsing but reject protected video in embedded WebKit views. The blocker is intentionally lighter than browser extensions such as uBlock Origin and pauses itself on major streaming services for compatibility.
+
+Safari Password AutoFill is not available for arbitrary third-party sites inside an ordinary embedded WebKit app. Use **More > Open Passwords...** to retrieve a login manually, or **More > Open in Safari** for Safari's full AutoFill experience. Floating Browser never reads or stores passwords itself.
 
 Floating Browser is not affiliated with, endorsed by, or sponsored by any third-party service linked from its launcher.
 

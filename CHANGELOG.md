@@ -2,6 +2,7 @@
 
 ## 0.3.0 - Public Beta Candidate
 
+- Added a system-safe Open Passwords shortcut and documented embedded WebKit's Password AutoFill limitation.
 - Expanded the built-in launcher with Apple TV+, Peacock, Paramount+, and Tubi, and pointed Prime Video to Amazon's included-with-Prime catalog.
 - Unified the glass navigation controls with the macOS title bar and removed the redundant Go button.
 - Added visible status feedback for loading, errors, blocker changes, downloads, and WebKit recovery.
