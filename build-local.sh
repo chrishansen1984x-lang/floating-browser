@@ -66,6 +66,7 @@ sign_app "$STAGED_APP"
 
 rm -rf "$APP_PATH"
 ditto "$STAGED_APP" "$APP_PATH"
+xattr -cr "$APP_PATH"
 verify_app "$APP_PATH"
 
 if [[ "${SKIP_INSTALL:-0}" == "1" ]]; then

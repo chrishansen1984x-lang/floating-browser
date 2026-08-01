@@ -31,8 +31,10 @@ import Testing
     #expect(BrowserPolicy.shouldPauseContentBlocking(for: try #require(URL(string: "https://www.amazon.com/gp/video/collection/IncludedwithPrime"))))
     #expect(BrowserPolicy.shouldPauseContentBlocking(for: try #require(URL(string: "https://www.peacocktv.com/watch/home"))))
     #expect(BrowserPolicy.shouldPauseContentBlocking(for: try #require(URL(string: "https://www.paramountplus.com/home"))))
+    #expect(BrowserPolicy.shouldPauseContentBlocking(for: try #require(URL(string: "https://tv.youtube.com/watch/example"))))
     #expect(BrowserPolicy.shouldPauseContentBlocking(for: try #require(URL(string: "https://tv.apple.com"))))
     #expect(BrowserPolicy.shouldPauseContentBlocking(for: try #require(URL(string: "https://tubitv.com/home"))))
+    #expect(!BrowserPolicy.shouldPauseContentBlocking(for: try #require(URL(string: "https://www.youtube.com/watch?v=example"))))
     #expect(!BrowserPolicy.shouldPauseContentBlocking(for: try #require(URL(string: "https://notamazon.com"))))
     #expect(!BrowserPolicy.shouldPauseContentBlocking(for: try #require(URL(string: "https://fakepeacocktv.com"))))
 }

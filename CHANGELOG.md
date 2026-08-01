@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1 - YouTube TV Compatibility Test
+
+- Paused the built-in content blocker on `tv.youtube.com` so it cannot interfere with YouTube TV media requests.
+- Kept content blocking behavior unchanged on standard YouTube pages.
+
 ## 0.3.0 - Public Beta Candidate
 
 - Added a system-safe Open Passwords shortcut and documented embedded WebKit's Password AutoFill limitation.
