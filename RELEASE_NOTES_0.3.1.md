@@ -1,17 +1,12 @@
-# Floating Browser 0.3.1 - YouTube TV Compatibility Test
+# Floating Browser 0.3.1 - YouTube TV Compatibility Fix
 
-This unsigned prerelease pauses Floating Browser's built-in content blocker on `tv.youtube.com`. It addresses a report where YouTube TV played audio but displayed no video.
+This unsigned public beta pauses Floating Browser's built-in content blocker on `tv.youtube.com`. The change fixes reported YouTube TV playback where audio worked but video remained black.
 
-## Testing Requested
+## What Changed
 
-Please test live and recorded YouTube TV playback. If audio plays without video, include the following in your report:
-
-- Whether the same channel plays in Safari.
-- Whether the Mac is connected to an external display, dock, or DisplayLink adapter.
-- Whether the problem affects live TV, recordings, or both.
-- Your macOS version and Mac model.
-
-Protected streaming video may still be rejected by YouTube TV or WebKit even when the blocker is disabled. Use **More > Open in Safari** if playback remains unavailable.
+- YouTube TV now receives unmodified media requests when the user has enabled Floating Browser's built-in blocker.
+- Standard YouTube pages retain their existing blocking behavior.
+- The fix was confirmed by the user who originally reported the problem.
 
 ## Install
 

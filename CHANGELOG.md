@@ -1,8 +1,8 @@
 # Changelog
 
-## 0.3.1 - YouTube TV Compatibility Test
+## 0.3.1 - YouTube TV Compatibility
 
-- Paused the built-in content blocker on `tv.youtube.com` so it cannot interfere with YouTube TV media requests.
+- Paused the built-in content blocker on `tv.youtube.com`, fixing reported audio-only YouTube TV playback.
 - Kept content blocking behavior unchanged on standard YouTube pages.
 
 ## 0.3.0 - Public Beta Candidate
